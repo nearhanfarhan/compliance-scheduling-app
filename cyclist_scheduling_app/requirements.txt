@@ -8,3 +8,4 @@ gspread-dataframe
 geopy
 requests
 google-auth-oauthlib
+streamlit-oauth
