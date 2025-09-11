@@ -1,3 +1,4 @@
 build-essential
 gfortran
 libopenblas-dev
+pkg-config
