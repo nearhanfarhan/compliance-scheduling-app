@@ -19,8 +19,8 @@ from google.auth.transport import requests as goog_requests
 # App Configuration & Secrets
 # =======================================
 
-st.set_page_config(page_title="Weekly Team Scheduler", layout="wide")
-st.title("🚴 Team Scheduling Automation Tool")
+st.set_page_config(page_title="Cyclist Team Scheduler", layout="wide")
+st.title("🚴 London Compliance Team Scheduling Tool")
 
 # Use Streamlit's secrets management for credentials and API keys
 try:
