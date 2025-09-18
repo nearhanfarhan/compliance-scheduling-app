@@ -83,7 +83,6 @@ else:
             # =======================================
             # REFACTORED SCRIPT FUNCTIONS
             # =======================================
-            @st.cache_data(ttl=3600)
             def get_gspread_client():
                 """Authenticates and returns a gspread client. Cached for performance."""
                 creds = Credentials.from_service_account_info(SERVICE_ACCOUNT_CREDS, scopes=SCOPES)
