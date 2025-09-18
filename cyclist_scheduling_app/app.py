@@ -74,7 +74,7 @@ else:
         user_email = user_info.get('email')
 
         # Check if the email domain is correct
-        if user_email and user_email.endswith('@li.me'):
+        if user_email and user_email.endswith(('@li.me', '@ext.li.me')):
             
             st.sidebar.success(f"Logged in as {user_info.get('name')}")
             
