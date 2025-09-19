@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit_oauth import OAuth2Component
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date # 🔴 Import 'date' for the default name
 import gspread
 from gspread_dataframe import get_as_dataframe
 from geopy.distance import geodesic
@@ -10,7 +10,6 @@ from scipy.optimize import linear_sum_assignment
 import requests
 from google.oauth2.service_account import Credentials
 import io
-# --- NEW IMPORTS FOR DECODING GOOGLE'S TOKEN ---
 from google.oauth2 import id_token
 from google.auth.transport import requests as goog_requests
 
@@ -19,7 +18,7 @@ from google.auth.transport import requests as goog_requests
 # App Configuration & Secrets
 # =======================================
 
-st.set_page_config(page_title="Cyclist Team Scheduler", layout="wide")
+st.set_page_config(page_title="Weekly Team Scheduler", layout="wide")
 st.title("🚴 London Compliance Team Scheduling Tool")
 
 # Use Streamlit's secrets management for credentials and API keys
@@ -67,14 +66,12 @@ else:
     id_token_str = token_dict.get('id_token')
     
     try:
-        # Verify and decode the ID token
         user_info = id_token.verify_oauth2_token(
             id_token_str, goog_requests.Request(), CLIENT_ID
         )
         user_email = user_info.get('email')
 
-        # Check if the email domain is correct
-        if user_email and user_email.endswith(('@li.me', '@ext.li.me')):
+        if user_email and user_email.endswith('@li.me'):
             
             st.sidebar.success(f"Logged in as {user_info.get('name')}")
             
@@ -83,8 +80,9 @@ else:
             # =======================================
             # REFACTORED SCRIPT FUNCTIONS
             # =======================================
+            
             def get_gspread_client():
-                """Authenticates and returns a gspread client. Cached for performance."""
+                """Authenticates and returns a gspread client."""
                 creds = Credentials.from_service_account_info(SERVICE_ACCOUNT_CREDS, scopes=SCOPES)
                 client = gspread.authorize(creds)
                 return client
@@ -103,7 +101,6 @@ else:
                     st.error(f"Worksheet '{worksheet_name}' not found in the spreadsheet.")
                     return None
             
-            # ... (All your other functions: generate_weekly_availability, etc. remain here unchanged)
             def generate_weekly_availability(daily_roster_files, employee_info_file, client, cyclist_sheet_id):
                 employee_df = pd.read_csv(employee_info_file)
                 employee_df = employee_df[employee_df['Location'] == 'Lime - London OOW Labor']
@@ -284,10 +281,12 @@ else:
                         row[date] = assignment
                     schedule_data.append(row)
                 return pd.DataFrame(schedule_data)
-            def write_schedule_to_google_sheet(client, sheet_id, availability_df, all_assignment_dicts):
+            
+            # 🔴 CHANGE 2: UPDATE THE FUNCTION TO ACCEPT THE SCHEDULE NAME
+            def write_schedule_to_google_sheet(client, sheet_id, schedule_name, availability_df, all_assignment_dicts):
                 try:
                     spreadsheet = client.open_by_key(sheet_id)
-                    sheet_name = "New Schedule"
+                    sheet_name = schedule_name # Use the provided name
                     try:
                         worksheet = spreadsheet.worksheet(sheet_name)
                         spreadsheet.del_worksheet(worksheet)
@@ -320,10 +319,18 @@ else:
 
             st.sidebar.header("⚙️ Configuration")
             st.sidebar.info("Upload files and provide Google Sheet IDs to generate the schedule.")
+
+            if st.sidebar.button("🔄 Clear Cache & Refresh Data"):
+                st.cache_data.clear()
+                st.sidebar.success("Cache cleared!")
             
             fcl_sheet_id = st.sidebar.text_input("Full Cyclist List & Pre-Assignment Sheet ID", "1IH24J2EpdjJKEuvqQrZSfKaElq-k77XJyoSuD5jfUIY")
             zone_sheet_id = st.sidebar.text_input("Zone Definitions Sheet ID", "1e6BZP5yWlOHLeks0wDInanKX2U_DA2CC0SbGjjeotZM")
             
+            # 🔴 CHANGE 1: ADD THE TEXT INPUT FOR THE SCHEDULE NAME
+            default_name = f"Schedule - {date.today().strftime('%Y-%m-%d')}"
+            schedule_name = st.sidebar.text_input("Enter a Name for the New Schedule Sheet", default_name)
+
             st.sidebar.header("📄 File Uploads")
             employee_info_file = st.sidebar.file_uploader("1. Upload Team Details CSV", type="csv")
             daily_roster_files = st.sidebar.file_uploader("2. Upload Daily Roster CSVs (Select multiple)", type="csv", accept_multiple_files=True)
@@ -335,6 +342,7 @@ else:
                     with st.spinner("Processing... This might take a few moments."):
                         client = get_gspread_client()
                         st.write("### Step 1: Generating Worker Availability...")
+                        # ... (code inside the button logic is mostly unchanged)
                         availability_df = generate_weekly_availability(daily_roster_files, employee_info_file, client, fcl_sheet_id)
                         if availability_df is None:
                             st.error("Failed to generate availability. Please check the uploaded files and Sheet IDs.")
@@ -384,9 +392,12 @@ else:
                         st.dataframe(final_schedule_df)
                         st.write("### Step 5: Writing to Google Sheets...")
                         all_assignment_dicts = {'east_day': east_day_assign, 'west_day': west_day_assign, 'east_evening': east_eve_assign, 'west_evening': west_eve_assign, 'east_weekend': east_wknd_assign, 'west_weekend': west_wknd_assign}
-                        success, error_message = write_schedule_to_google_sheet(client, fcl_sheet_id, availability_df, all_assignment_dicts)
+                        
+                        # 🔴 CHANGE 3: PASS THE SCHEDULE NAME TO THE FUNCTION
+                        success, error_message = write_schedule_to_google_sheet(client, fcl_sheet_id, schedule_name, availability_df, all_assignment_dicts)
+                        
                         if success:
-                            st.success("✅ Schedule successfully written to 'New Schedule' tab in your Google Sheet!")
+                            st.success(f"✅ Schedule successfully written to '{schedule_name}' tab in your Google Sheet!")
                         else:
                             st.error(f"🚨 Failed to write to Google Sheets: {error_message}")
                         st.header("📋 Daily Assignment Details")
@@ -410,9 +421,7 @@ else:
             st.error("Access Denied. Please log in with your company email.")
             
     except ValueError as e:
-        # Handle invalid or expired token
         st.error(f"Login failed or token is invalid. Please try logging in again. Error: {e}")
-        # Clear the faulty token and rerun to show the login button
         if 'token' in st.session_state:
             del st.session_state['token']
         st.rerun()
